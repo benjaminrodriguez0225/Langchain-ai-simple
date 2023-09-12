@@ -78,13 +78,11 @@ def create_chain(
             "question": lambda x: x["question"],
             "chat_history": lambda x: x["chat_history"],
         }
-        prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", _template),
-                MessagesPlaceholder(variable_name="chat_history"),
-                ("human", "{question}"),
-            ]
-        )
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", _template),
+            MessagesPlaceholder(variable_name="chat_history"),
+            ("human", "{question}"),
+        ])
     else:
         _inputs = RunnableMap(
             {
@@ -113,20 +111,21 @@ def _get_retriever():
     WEAVIATE_URL = os.environ["WEAVIATE_URL"]
     WEAVIATE_API_KEY = os.environ["WEAVIATE_API_KEY"]
 
-    embeddings = OpenAIEmbeddings(chunk_size=200)
     client = weaviate.Client(
         url=WEAVIATE_URL,
         auth_client_secret=weaviate.AuthApiKey(api_key=WEAVIATE_API_KEY),
     )
     weaviate_client = Weaviate(
         client=client,
-        index_name="LangChain_test_idx",
+        index_name="LangChain_agent_docs",
         text_key="text",
-        embedding=embeddings,
+        embedding=OpenAIEmbeddings(chunk_size=200),
         by_text=False,
         attributes=["source"],
     )
-    return weaviate_client.as_retriever(search_kwargs=dict(k=10))
+    return weaviate_client.as_retriever(
+        search_kwargs=dict(k=3)
+    )
 
 
 class CustomHallucinationEvaluator(RunEvaluator):
@@ -156,7 +155,7 @@ class CustomHallucinationEvaluator(RunEvaluator):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset-name", default="Chat LangChain Questions")
+    parser.add_argument("--dataset-name", default="Chat LangChain Complex Questions")
     parser.add_argument("--model-provider", default="openai")
     parser.add_argument("--prompt-type", default="chat")
     args = parser.parse_args()
@@ -175,7 +174,9 @@ if __name__ == "__main__":
         dataset_name=args.dataset_name,
         llm_or_chain_factory=constructor,
         evaluation=eval_config,
+        tags=["simple_chain"],
         verbose=True,
     )
+    print(results)
     proj = client.read_project(project_name=results["project_name"])
     print(proj.feedback_stats)
